@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rubrica TG Poste Top Post</title>
+  <!-- Stili basati sullo stile di Poste.it -->
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #F5F5F5; color: #333; margin: 0; padding: 20px; }
+    h1, h2, h3 { color: #004C99; margin-top: 0; }
+    .section { background-color: #FFFFFF; border-left: 6px solid #FFD200; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .button { background-color: #004C99; color: #FFFFFF; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+    .button:hover { background-color: #FFD200; color: #004C99; }
+    .button:disabled { background-color: #CCCCCC; cursor: not-allowed; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .table th, .table td { border: 1px solid #DDD; padding: 8px; text-align: left; }
+    .table th { background-color: #F0F0F0; }
+    .link { color: #004C99; text-decoration: none; }
+    .link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Rubrica TG Poste Top Post</h1>
+
+  <!-- PRIMA SEZIONE: upload ed elaborazione -->
+  <div class="section" id="upload-section">
+    <h2>Carica e Elabora</h2>
+    <input type="file" id="fileInput" accept=".xlsx" />
+    <button id="processBtn" class="button" disabled>Elabora dati</button>
+  </div>
+
+  <!-- SECONDA SEZIONE: esportazioni -->
+  <div class="section" id="export-section">
+    <h2>Condivisione</h2>
+    <button id="exportExcelBtn" class="button" disabled>Esporta in Excel</button>
+    <button id="saveHtmlBtn" class="button" disabled>Salva pagina web</button>
+  </div>
+
+  <!-- TERZA SEZIONE: risultati -->
+  <div class="section" id="results-section" style="display:none;">
+    <h2 id="results-title"></h2>
+
+    <!-- Sotto-sezione aggregati -->
+    <div id="aggregated-section">
+      <h3>Dati aggregati per argomento</h3>
+      <p>Di seguito gli argomenti che, sommando tutti i post, complessivamente hanno raccolto più like e reazioni.</p>
+      <table class="table" id="aggregatedTable">
+        <thead>
+          <tr>
+            <th>Argomento</th><th>Numero post</th><th>Interazioni</th><th>Visualizzazioni</th><th>Like e reazioni</th><th>Link</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Sotto-sezione top post -->
+    <div id="top-posts-section" style="margin-top:30px;">
+      <h3>Elenco dei post con più like in assoluto</h3>
+      <table class="table" id="topPostsTable">
+        <thead>
+          <tr>
+            <th>Data</th><th>Canale</th><th>Argomento</th><th>Like e reazioni</th><th>Interazioni</th><th>Visualizzazioni</th><th>Copy</th><th>Link</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Librerie esterne -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    let rawData = [];
+    let aggArray = [];
+    let allPosts = [];
+
+    function parseDateString(dateStr) {
+      const parts = dateStr.split('/');
+      let day = parseInt(parts[0], 10);
+      let month = parseInt(parts[1], 10) - 1;
+      let year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const data = evt.target.result;
+        const wb = XLSX.read(data, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rawData = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        document.getElementById('processBtn').disabled = false;
+      };
+      reader.readAsBinaryString(file);
+    });
+
+    document.getElementById('processBtn').addEventListener('click', () => {
+      const filtered = rawData.filter(r => r.Campagna === 'Editoriale');
+      if (!filtered.length) return alert('Nessun dato con Campagna = "Editoriale"');
+      const firstDate = parseDateString(filtered[0].Data);
+      const fmt = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+      document.getElementById('results-title').textContent = `Top Post del mese di ${fmt.format(firstDate)}`;
+
+      // Aggregati
+      const mapAgg = {};
+      filtered.forEach(r => {
+        const key = r.Argomento;
+        if (!mapAgg[key]) mapAgg[key] = { count: 0, interactions: 0, views: 0, likes: 0, link: r.Link };
+        mapAgg[key].count++;
+        mapAgg[key].interactions += Number(r.Interazioni) || 0;
+        mapAgg[key].views += Number(r.Visualizzazioni) || 0;
+        mapAgg[key].likes += Number(r['Like e reazioni']) || 0;
+      });
+      aggArray = Object.entries(mapAgg).map(([arg,v]) => ({ Argomento: arg, count: v.count, interactions: v.interactions, views: v.views, likes: v.likes, link: v.link }))
+        .sort((a,b) => b.likes - a.likes).slice(0,10);
+
+      // Tutti i post ordinati
+      allPosts = filtered.slice().sort((a,b) => (Number(b['Like e reazioni'])||0) - (Number(a['Like e reazioni'])||0));
+
+      // Popola tabella aggregati
+      const aBody = document.querySelector('#aggregatedTable tbody'); aBody.innerHTML = '';
+      aggArray.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.Argomento}</td><td>${r.count.toLocaleString('it-IT')}</td><td>${r.interactions.toLocaleString('it-IT')}</td><td>${r.views.toLocaleString('it-IT')}</td><td>${r.likes.toLocaleString('it-IT')}</td><td><a class=\"link\" href=\"${r.link}\" target=\"_blank\">${r.link}</a></td>`;
+        aBody.appendChild(tr);
+      });
+
+      // Popola tabella top-posts con tutti i post e colonna Copy
+      const tBody = document.querySelector('#topPostsTable tbody'); tBody.innerHTML = '';
+      allPosts.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.Data}</td><td>${r.Canale}</td><td>${r.Argomento}</td>
+          <td>${(Number(r['Like e reazioni'])||0).toLocaleString('it-IT')}</td>
+          <td>${(Number(r.Interazioni)||0).toLocaleString('it-IT')}</td>
+          <td>${(Number(r.Visualizzazioni)||0).toLocaleString('it-IT')}</td>
+          <td>${r.Copy || ''}</td>
+          <td><a class=\"link\" href=\"${r.Link}\" target=\"_blank\">${r.Link}</a></td>`;
+        tBody.appendChild(tr);
+      });
+
+      document.getElementById('results-section').style.display = 'block';
+      document.getElementById('exportExcelBtn').disabled = false;
+      document.getElementById('saveHtmlBtn').disabled = false;
+    });
+
+    // Export Excel
+    document.getElementById('exportExcelBtn').addEventListener('click', () => {
+      const wb = XLSX.utils.book_new();
+      // Sheet1: TopPosts
+      const topData = allPosts.map(r => ({ Data: r.Data, Canale: r.Canale, Argomento: r.Argomento, 'Like e reazioni': Number(r['Like e reazioni'])||0, Interazioni: Number(r.Interazioni)||0, Visualizzazioni: Number(r.Visualizzazioni)||0, Copy: r.Copy, Link: r.Link }));
+      const ws1 = XLSX.utils.json_to_sheet(topData, { header: ['Data','Canale','Argomento','Like e reazioni','Interazioni','Visualizzazioni','Copy','Link'] });
+      XLSX.utils.book_append_sheet(wb, ws1, 'TopPosts');
+      // Sheet2: Aggregati
+      const aggData = aggArray.map(r => ({ Argomento: r.Argomento, 'Numero post': r.count, Interazioni: r.interactions, Visualizzazioni: r.views, 'Like e reazioni': r.likes, Link: r.link }));
+      const ws2 = XLSX.utils.json_to_sheet(aggData, { header: ['Argomento','Numero post','Interazioni','Visualizzazioni','Like e reazioni','Link'] });
+      XLSX.utils.book_append_sheet(wb, ws2, 'Aggregati');
+      XLSX.writeFile(wb, 'RubricaTGPoste_TopPost.xlsx');
+    });
+
+    // Salva pagina web (HTML) senza le sezioni Carica/Condivisione
+    document.getElementById('saveHtmlBtn').addEventListener('click', () => {
+      // Nascondi temporaneamente i blocchi
+      const upload = document.getElementById('upload-section');
+      const share = document.getElementById('export-section');
+      upload.style.display = 'none';
+      share.style.display = 'none';
+      // Genera HTML completo
+      const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      // Ripristina i blocchi
+      upload.style.display = '';
+      share.style.display = '';
+      // Scarica
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'RubricaTGPoste_TopPost.html';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
