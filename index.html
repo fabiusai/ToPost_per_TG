@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="favicon.ico" type="image/png" />
+  <link rel="icon" href="favicon.ico" type="image/png" />
   <title>Rubrica TG Poste Top Post</title>
   <!-- Stili basati sullo stile di Poste.it -->
   <style>
@@ -14,12 +14,12 @@
     .button:hover { background-color: #FFD200; color: #004C99; }
     .button:disabled { background-color: #CCCCCC; cursor: not-allowed; }
     .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    .table th, .table td { border: 1px solid #DDD; padding: 8px; text-align: left; }
+    .table th, .table td { border: 1px solid #DDD; padding: 8px; }
     .table th { background-color: #F0F0F0; }
+    .table th.text-right, .table td.text-right { text-align: right; }
     .link { color: #004C99; text-decoration: none; }
     .link:hover { text-decoration: underline; }
   </style>
-<link rel="icon" type="image/ico" href="favicon.ico">
 </head>
 <body>
   <h1>Rubrica TG Poste Top Post</h1>
@@ -42,27 +42,39 @@
   <div class="section" id="results-section" style="display:none;">
     <h2 id="results-title"></h2>
 
-    <!-- Sotto-sezione aggregati -->
+    <!-- Dati aggregati -->
     <div id="aggregated-section">
       <h3>Dati aggregati per argomento</h3>
       <p>Di seguito gli argomenti che, sommando tutti i post, complessivamente hanno raccolto più like e reazioni.</p>
       <table class="table" id="aggregatedTable">
         <thead>
           <tr>
-            <th>Argomento</th><th>Numero post</th><th>Interazioni</th><th>Visualizzazioni</th><th>Like e reazioni</th><th>Link</th>
+            <th>Argomento</th>
+            <th class="text-right">Numero post</th>
+            <th class="text-right">Interazioni</th>
+            <th class="text-right">Visualizzazioni</th>
+            <th class="text-right">Like e reazioni</th>
+            <th>Link</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
 
-    <!-- Sotto-sezione top post -->
+    <!-- Elenco top post -->
     <div id="top-posts-section" style="margin-top:30px;">
       <h3>Elenco dei post con più like in assoluto</h3>
       <table class="table" id="topPostsTable">
         <thead>
           <tr>
-            <th>Data</th><th>Canale</th><th>Argomento</th><th>Like e reazioni</th><th>Interazioni</th><th>Visualizzazioni</th><th>Copy</th><th>Link</th>
+            <th>Data</th>
+            <th>Canale</th>
+            <th>Argomento</th>
+            <th class="text-right">Like e reazioni</th>
+            <th class="text-right">Interazioni</th>
+            <th class="text-right">Visualizzazioni</th>
+            <th>Copy</th>
+            <th>Link</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -70,13 +82,19 @@
     </div>
   </div>
 
-  <!-- Librerie esterne -->
+  <!-- Libreria XLSX -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
     let rawData = [];
     let aggArray = [];
     let allPosts = [];
+
+    // Funzione per formattare i numeri con separatore di migliaia
+    function formatNumber(num) {
+      if (isNaN(num)) return '0';
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
 
     function parseDateString(dateStr) {
       const parts = dateStr.split('/');
@@ -108,7 +126,7 @@
       const fmt = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
       document.getElementById('results-title').textContent = `Top Post del mese di ${fmt.format(firstDate)}`;
 
-      // Aggregati
+      // Calcolo aggregati
       const mapAgg = {};
       filtered.forEach(r => {
         const key = r.Argomento;
@@ -118,31 +136,41 @@
         mapAgg[key].views += Number(r.Visualizzazioni) || 0;
         mapAgg[key].likes += Number(r['Like e reazioni']) || 0;
       });
-      aggArray = Object.entries(mapAgg).map(([arg,v]) => ({ Argomento: arg, count: v.count, interactions: v.interactions, views: v.views, likes: v.likes, link: v.link }))
-        .sort((a,b) => b.likes - a.likes).slice(0,10);
+      aggArray = Object.entries(mapAgg)
+        .map(([arg, v]) => ({ Argomento: arg, count: v.count, interactions: v.interactions, views: v.views, likes: v.likes, link: v.link }))
+        .sort((a, b) => b.likes - a.likes)
+        .slice(0, 10);
 
-      // Tutti i post ordinati
-      allPosts = filtered.slice().sort((a,b) => (Number(b['Like e reazioni'])||0) - (Number(a['Like e reazioni'])||0));
+      // Tutti i post ordinati per like
+      allPosts = filtered.slice().sort((a, b) => (Number(b['Like e reazioni']) || 0) - (Number(a['Like e reazioni']) || 0));
 
-      // Popola tabella aggregati
+      // Popola tabella aggregati con formato numerico italiano e allineamento a destra
       const aBody = document.querySelector('#aggregatedTable tbody'); aBody.innerHTML = '';
       aggArray.forEach(r => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.Argomento}</td><td>${r.count.toLocaleString('it-IT')}</td><td>${r.interactions.toLocaleString('it-IT')}</td><td>${r.views.toLocaleString('it-IT')}</td><td>${r.likes.toLocaleString('it-IT')}</td><td><a class=\"link\" href=\"${r.link}\" target=\"_blank\">${r.link}</a></td>`;
+        tr.innerHTML = `
+          <td>${r.Argomento}</td>
+          <td class="text-right">${formatNumber(r.count)}</td>
+          <td class="text-right">${formatNumber(r.interactions)}</td>
+          <td class="text-right">${formatNumber(r.views)}</td>
+          <td class="text-right">${formatNumber(r.likes)}</td>
+          <td><a class="link" href="${r.link}" target="_blank">${r.link}</a></td>`;
         aBody.appendChild(tr);
       });
 
-      // Popola tabella top-posts con tutti i post e colonna Copy
+      // Popola tabella top post con formato numerico italiano e allineamento a destra
       const tBody = document.querySelector('#topPostsTable tbody'); tBody.innerHTML = '';
       allPosts.forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${r.Data}</td><td>${r.Canale}</td><td>${r.Argomento}</td>
-          <td>${(Number(r['Like e reazioni'])||0).toLocaleString('it-IT')}</td>
-          <td>${(Number(r.Interazioni)||0).toLocaleString('it-IT')}</td>
-          <td>${(Number(r.Visualizzazioni)||0).toLocaleString('it-IT')}</td>
+          <td>${r.Data}</td>
+          <td>${r.Canale}</td>
+          <td>${r.Argomento}</td>
+          <td class="text-right">${formatNumber(Number(r['Like e reazioni']) || 0)}</td>
+          <td class="text-right">${formatNumber(Number(r.Interazioni) || 0)}</td>
+          <td class="text-right">${formatNumber(Number(r.Visualizzazioni) || 0)}</td>
           <td>${r.Copy || ''}</td>
-          <td><a class=\"link\" href=\"${r.Link}\" target=\"_blank\">${r.Link}</a></td>`;
+          <td><a class="link" href="${r.Link}" target="_blank">${r.Link}</a></td>`;
         tBody.appendChild(tr);
       });
 
@@ -151,39 +179,51 @@
       document.getElementById('saveHtmlBtn').disabled = false;
     });
 
-    // Export Excel
+    // Export Excel con formattazione numerica
     document.getElementById('exportExcelBtn').addEventListener('click', () => {
       const wb = XLSX.utils.book_new();
-      // Sheet1: TopPosts
-      const topData = allPosts.map(r => ({ Data: r.Data, Canale: r.Canale, Argomento: r.Argomento, 'Like e reazioni': Number(r['Like e reazioni'])||0, Interazioni: Number(r.Interazioni)||0, Visualizzazioni: Number(r.Visualizzazioni)||0, Copy: r.Copy, Link: r.Link }));
+      const fmtNumber = '#.##0';
+
+      // Sheet TopPosts
+      const topData = allPosts.map(r => ({ Data: r.Data, Canale: r.Canale, Argomento: r.Argomento, 'Like e reazioni': Number(r['Like e reazioni']) || 0, Interazioni: Number(r.Interazioni) || 0, Visualizzazioni: Number(r.Visualizzazioni) || 0, Copy: r.Copy, Link: r.Link }));
       const ws1 = XLSX.utils.json_to_sheet(topData, { header: ['Data','Canale','Argomento','Like e reazioni','Interazioni','Visualizzazioni','Copy','Link'] });
+      const range1 = XLSX.utils.decode_range(ws1['!ref']);
+      [3,4,5].forEach(C => {
+        for (let R = 1; R <= range1.e.r; ++R) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          const cell = ws1[cellRef];
+          if (cell && cell.t === 'n') cell.z = fmtNumber;
+        }
+      });
       XLSX.utils.book_append_sheet(wb, ws1, 'TopPosts');
-      // Sheet2: Aggregati
+
+      // Sheet Aggregati
       const aggData = aggArray.map(r => ({ Argomento: r.Argomento, 'Numero post': r.count, Interazioni: r.interactions, Visualizzazioni: r.views, 'Like e reazioni': r.likes, Link: r.link }));
       const ws2 = XLSX.utils.json_to_sheet(aggData, { header: ['Argomento','Numero post','Interazioni','Visualizzazioni','Like e reazioni','Link'] });
+      const range2 = XLSX.utils.decode_range(ws2['!ref']);
+      [1,2,3,4].forEach(C => {
+        for (let R = 1; R <= range2.e.r; ++R) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          const cell = ws2[cellRef];
+          if (cell && cell.t === 'n') cell.z = fmtNumber;
+        }
+      });
       XLSX.utils.book_append_sheet(wb, ws2, 'Aggregati');
+
       XLSX.writeFile(wb, 'RubricaTGPoste_TopPost.xlsx');
     });
 
-    // Salva pagina web (HTML) senza le sezioni Carica/Condivisione
+    // Salva pagina web senza sezioni Carica/Condivisione
     document.getElementById('saveHtmlBtn').addEventListener('click', () => {
-      // Nascondi temporaneamente i blocchi
       const upload = document.getElementById('upload-section');
       const share = document.getElementById('export-section');
-      upload.style.display = 'none';
-      share.style.display = 'none';
-      // Genera HTML completo
+      upload.style.display = 'none'; share.style.display = 'none';
       const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-      // Ripristina i blocchi
-      upload.style.display = '';
-      share.style.display = '';
-      // Scarica
+      upload.style.display = ''; share.style.display = '';
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'RubricaTGPoste_TopPost.html';
-      a.click();
+      const a = document.createElement('a'); a.href = url;
+      a.download = 'RubricaTGPoste_TopPost.html'; a.click();
       URL.revokeObjectURL(url);
     });
   </script>
